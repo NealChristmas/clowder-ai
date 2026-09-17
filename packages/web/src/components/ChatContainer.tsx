@@ -42,6 +42,7 @@ import { getUserId } from '@/utils/userId';
 import { AgentHookHealthNotice, shouldRenderAgentHookHealthNotice } from './AgentHookHealthNotice';
 import { AuthorizationCard } from './AuthorizationCard';
 import { BootcampListModal } from './BootcampListModal';
+import { BootcampProgressBar } from './BootcampProgressBar';
 import { BootstrapOrchestrator } from './BootstrapOrchestrator';
 import { ChatContainerHeader } from './ChatContainerHeader';
 import { ChatInput } from './ChatInput';
@@ -1147,6 +1148,9 @@ export function ChatContainer({ threadId }: ChatContainerProps) {
                   />
                 </div>
               </div>
+            )}
+            {currentBootcampState && (
+              <BootcampProgressBar phase={currentBootcampState.phase} completedAt={currentBootcampState.completedAt} />
             )}
             {!hasMore && messages.length > 0 && (
               <div className="text-center py-3 text-xs text-cafe-muted">没有更多消息了</div>

@@ -7,44 +7,7 @@ import { apiFetch } from '@/utils/api-client';
 import { invalidateSidebarProjection } from '@/utils/sidebar-thread-snapshot';
 import { BootcampIcon } from './icons/BootcampIcon';
 import { pushThreadRouteWithHistory } from './ThreadSidebar/thread-navigation';
-
-/** Phase labels for human-readable display */
-const PHASE_LABELS: Record<string, string> = {
-  'phase-1-intro': '自我介绍',
-  'phase-2-env-check': '环境检测',
-  'phase-3-config-help': '配置帮助',
-  'phase-4-task-select': '选择任务',
-  'phase-5-kickoff': '确认需求',
-  'phase-6-design': '设计',
-  'phase-7-dev': '开发',
-  'phase-7.5-add-teammate': '添加队友',
-  'phase-8-collab': '多猫协作',
-  'phase-9-complete': '完成',
-  'phase-10-retro': '回顾',
-  'phase-11-farewell': '毕业',
-};
-
-const PHASE_ORDER = [
-  'phase-1-intro',
-  'phase-2-env-check',
-  'phase-3-config-help',
-  'phase-4-task-select',
-  'phase-5-kickoff',
-  'phase-6-design',
-  'phase-7-dev',
-  'phase-7.5-add-teammate',
-  'phase-8-collab',
-  'phase-9-complete',
-  'phase-10-retro',
-  'phase-11-farewell',
-];
-
-function phaseProgress(phase: string | undefined): number {
-  if (!phase) return 0;
-  const idx = PHASE_ORDER.indexOf(phase);
-  if (idx < 0) return 0;
-  return Math.round(((idx + 1) / PHASE_ORDER.length) * 100);
-}
+import { PHASE_LABELS, PHASE_ORDER, phaseProgress, phaseIndex } from '@/config/bootcamp-phases';
 
 async function readApiError(res: Response, fallback: string): Promise<string> {
   try {
@@ -189,7 +152,7 @@ export function BootcampListModal({ open, onClose, currentThreadId }: BootcampLi
               const isCurrent = t.id === currentThreadId;
               const progress = phaseProgress(t.phase);
               const phaseLabel = PHASE_LABELS[t.phase ?? ''] ?? t.phase ?? '?';
-              const phaseIdx = PHASE_ORDER.indexOf(t.phase ?? '');
+              const phaseIdx = phaseIndex(t.phase);
               const phaseNum = phaseIdx >= 0 ? phaseIdx + 1 : '?';
 
               return (

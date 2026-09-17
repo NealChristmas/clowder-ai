@@ -1,0 +1,135 @@
+@startuml clowder-message-flow
+!theme plain
+title Clowder AI 多猫协作：消息流向与编排全景图\n(线程=唯一真相源 · @mention=唤醒信号 · 无点对点通道)
+
+skinparam backgroundColor #FEFEFE
+skinparam activityBackgroundColor #F0F4FF
+skinparam activityBorderColor #3355AA
+skinparam activityDiamondBackgroundColor #FFF2CC
+skinparam activityDiamondBorderColor #B8860B
+skinparam noteBackgroundColor #FFFFDD
+skinparam ArrowColor #3355AA
+skinparam defaultFontSize 12
+
+|#LightBlue|你 (operator)|
+start
+:你在绑定了项目目录的线程里发消息;
+note right
+  消息必须包含行首 @mention
+  （句中 @ 不触发路由）
+  例：
+  "帮我实现登录模块
+  @dsv4pro"
+end note
+
+|#LightGrey|API :3004|
+:POST /api/messages\n(身份解析: session cookie > header > default-user);
+:幂等检查 (idempotencyKey);
+:线程校验\n(存在? 未删除? 绑定项目?);
+
+fork
+  :消息落库 Redis\n(线程=唯一真相源);
+fork again
+  :WebSocket 事件流广播\n(订阅-广播模型, at-least-once);
+end fork
+
+|#LightGreen|路由层 AgentRouter|
+:① 提及解析\n(机械层: 剥代码块, 行首匹配,\n token 边界防 @opus 误命中 @opus-45);
+
+if (有显式 @mention?) then (yes)
+  :目标解析\n@handle → catId\n(查名册, 校验可用性);
+else (no)
+  :回退梯级\n(确定性优先, 不随机):
+  1. 回看最近5条用户消息的 @
+     (时间窗1h, 猫发言不抢路由)
+  2. 线程偏好猫 preferredCats
+  3. 线程默认猫
+  4. pickFallbackCat() 确定性回退;
+endif
+
+:分发调度\n(串行/并行, 深度限制, 乒乓检测);
+
+|#LightYellow|队列 QueueProcessor|
+if (目标猫正忙?) then (yes)
+  :任务入队 (202 queued)\n(执行追踪 startAll/completeAll\n崩溃恢复 F48);
+else (no)
+endif
+
+|#FFE4B5|上下文组装 assembleSmartWindowContext|
+:⑤ 智能窗口组装 (token 预算内);
+partition "上下文内容" {
+  :burst 近期消息全文\n(按消息间隔自动检测爆发段)\n← 狸花在这里"看到"宪宪说的话;
+  :omitted 旧消息 → 三件套:\n  · 墓碑摘要 tombstone "更早讨论过X/Y/Z"\n  · 锚点 anchors (与当前话题相关的关键句)\n  · 记忆指针 (指向证据库, 可主动查);
+  :接力棒 baton (上次谁干活干到哪);
+  :活跃任务 + 最近产物 artifacts;
+  :线程记忆 (跨session决策沉淀);
+}
+:L0 身份编译注入\n(性格+家规四铁律+队友表+关系档案)\n(fail-closed: 编译失败则拒绝调用);
+:生成简报卡\n"看到N条·省略N条·锚点N条"\n(明确告知猫没看到什么);
+
+|#E6E6FA|调用执行 invokeSingleCat|
+:创建调用记录 Invocation\n(status=running + callbackToken);
+:会话链解析\n(resume 上次 CLI session?);
+:spawn CLI 子进程;
+note right
+  宪宪: codex exec --json
+  狸花: opencode run --format json
+  墨墨: kimi -p --output-format stream-json
+  环境注入: API key(env不落命令行)
+  + 工作目录 + MCP地址
+end note
+
+:CLI 调用远端模型\n(GPT/GLM/DeepSeek/Kimi);
+:事件流翻译\n(各家格式→统一 AgentMessage 流);
+
+fork
+  :流式事件实时推浏览器\n(打字机效果);
+fork again
+  :猫干活中调 MCP 工具\n(带 callbackToken 鉴权):\n  cat_cafe_post_message 发消息\n  cat_cafe_hold_ball 拿球权\n  cat_cafe_search_evidence 查记忆\n  cat_cafe_cross_post_message 跨线程;
+end fork
+
+:Freshness 门禁 (F254)\n检查写作期间有无新消息:\n· 已完成回复必须发表(不撤回)\n· 相关新消息 → 追加补充\n· 过时与否判断权归还读者;
+
+|#C8E6C9|终态落库|
+:调用记录终态更新\n(succeeded必须带successfulCatIds\n空名单=数据造假,拒绝入库);
+:回复消息落库线程;
+:球权事件流追加\n(append-only, 永无悬空球);
+:token 用量记账 finance;
+
+|#FFD54F|A2A 接力检测 a2a-mentions|
+:扫描猫回复文本中的 @mention\n(剥代码块→行首匹配→过滤自调);
+if (回复中有行首 @其他猫?) then (yes)
+  if (护栏检查:\n链深<15 && 一条消息@≤2只?) then (pass)
+    :自动唤醒目标猫\n(回到路由层, 递归接力);
+    note right
+      例: 狸花回复
+      "登录模块完成
+      请 review @opus"
+      → 宪宪被自动唤醒
+      → 宪宪的上下文里
+        能看到狸花的代码
+    end note
+  else (拒绝)
+    :停止接力, 通知你;
+  endif
+else (no)
+  if (乒乓检测:\n两只猫互相踢皮球超阈值?) then (yes)
+    :强制停止, 升级 operator 裁决;
+  else (no)
+  endif
+endif
+
+:协作纪律层 (SOP 铁律)\n· 跨家族互审 (requireDifferentFamily)\n· 不许自审自己的代码\n· P1/P2 当轮清零才能合入\n· 可验证才算完成 (证据说话);
+
+|你 (operator)|
+:浏览器实时看到全部接力链;
+if (猫遇到阻塞/分歧无法收敛?) then (yes)
+  :升级给你裁决\n(球权卡住/坐标警报/愿景存疑);
+  :你做决策 → 继续循环;
+else (no)
+  :愿景守护 (feature close 时)\n"没达成愿景 = 没完成";
+  :教训沉淀 LL-XXX\n(坑+根因+防护, 必须可执行);
+  stop
+endif
+
+@enduml
